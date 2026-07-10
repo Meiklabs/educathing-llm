@@ -1,0 +1,85 @@
+# Publishes the Educathing image to GitHub Container Registry as
+# ghcr.io/meiklabs/educathing-llm:{latest,<sha>,<tag>}.
+#
+# Triggers:
+#   - push to the default branch → :latest and :sha-<sha>
+#   - push of a v* tag           → :<tag> (semver) and :latest
+#   - manual dispatch            → :<sha> only (dry-run friendly)
+#
+# The image is single-platform (linux/amd64) — the CFT VPS is Ubuntu x86_64.
+# If arm64 support is ever needed, add linux/arm64 to `platforms` below; the
+# upstream Dockerfile already handles both, but the arm64 build is slower
+# because Chromium (Playwright) has to run under QEMU.
+name: Publish Educathing image to GHCR
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: ['main', 'master']
+    tags: ['v*']
+    paths-ignore:
+      - '**.md'
+      - 'cloud-deployments/**'
+      - 'images/**'
+      - '.vscode/**'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.devcontainer/**'
+  workflow_dispatch:
+
+jobs:
+  build_and_push:
+    name: Build & push amd64 image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/meiklabs/educathing-llm
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+            type=sha,prefix=sha-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.title=Educathing
+            org.opencontainers.image.description=RAG curricular assistant for CFT de Magallanes (AnythingLLM fork).
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false

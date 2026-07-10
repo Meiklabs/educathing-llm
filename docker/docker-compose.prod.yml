@@ -1,0 +1,63 @@
+name: educathing
+
+# Production stack for Educathing (AnythingLLM fork for CFT de Magallanes).
+#
+# Two services:
+#   - educathing: the app itself, pulled from GHCR (no local build needed).
+#   - caddy: reverse proxy that terminates HTTPS with automatic Let's Encrypt
+#     certificates. Reads the domain from the DOMAIN variable in .env.
+#
+# Data lives in bind-mounted host folders next to this compose file so the
+# whole install (app storage, TLS certs, Caddy state) is one directory the
+# operator can back up with a single tar.
+
+networks:
+  educathing:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+services:
+  educathing:
+    image: ghcr.io/meiklabs/educathing-llm:latest
+    container_name: educathing
+    restart: unless-stopped
+    pull_policy: always
+    cap_add:
+      - SYS_ADMIN
+    env_file:
+      - .env
+    volumes:
+      - ./storage:/app/server/storage
+      - ./hotdir:/app/collector/hotdir
+      - ./outputs:/app/collector/outputs
+    networks:
+      - educathing
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "/bin/bash /usr/local/bin/docker-healthcheck.sh || exit 1"]
+      interval: 1m
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: educathing-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file:
+      - .env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - educathing
+    depends_on:
+      - educathing
