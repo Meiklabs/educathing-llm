@@ -113,17 +113,22 @@ function UsersContainer() {
 
 const ROLE_HINT = {
   default: [
-    "Can only send chats with workspaces they are added to by admin or managers.",
-    "Cannot modify any settings at all.",
+    "Docente. Puede conversar con el asistente dentro de las carreras (workspaces) a las que fue asignado por un administrador o asesor curricular.",
+    "No puede modificar configuraciones del sistema.",
   ],
   manager: [
-    "Can view, create, and delete any workspaces and modify workspace-specific settings.",
-    "Can create, update and invite new users to the instance.",
-    "Cannot modify LLM, vectorDB, embedding, or other connections.",
+    "Asesor Curricular. Puede ver, crear y eliminar carreras (workspaces) y modificar su configuración.",
+    "Puede crear, actualizar e invitar usuarios docentes y lectores.",
+    "No puede modificar el proveedor LLM, la base vectorial ni las conexiones del sistema.",
   ],
   admin: [
-    "Highest user level privilege.",
-    "Can see and do everything across the system.",
+    "Administrador. Máximo nivel de privilegio.",
+    "Puede ver y hacer todo dentro del sistema.",
+  ],
+  lector: [
+    "Lector. Solo tiene acceso a la biblioteca de documentos generados.",
+    "Puede filtrar por carrera y tipo de documento, y descargar los archivos.",
+    "No puede conversar con el asistente, subir documentos ni modificar workspaces.",
   ],
 };
 

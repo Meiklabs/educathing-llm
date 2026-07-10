@@ -9,7 +9,7 @@ function validRoleSelection(currentUser = {}, newUserParams = {}) {
     return { valid: true, error: null }; // not updating role, so skip.
   if (currentUser.role === ROLES.admin) return { valid: true, error: null };
   if (currentUser.role === ROLES.manager) {
-    const validRoles = [ROLES.manager, ROLES.default];
+    const validRoles = [ROLES.manager, ROLES.default, ROLES.lector];
     if (!validRoles.includes(newUserParams.role))
       return { valid: false, error: "Invalid role selection for user." };
     return { valid: true, error: null };
@@ -40,7 +40,7 @@ async function canModifyAdmin(userToModify, updates) {
 function validCanModify(currentUser, existingUser) {
   if (currentUser.role === ROLES.admin) return { valid: true, error: null };
   if (currentUser.role === ROLES.manager) {
-    const validRoles = [ROLES.manager, ROLES.default];
+    const validRoles = [ROLES.manager, ROLES.default, ROLES.lector];
     if (!validRoles.includes(existingUser.role))
       return { valid: false, error: "Cannot perform that action on user." };
     return { valid: true, error: null };

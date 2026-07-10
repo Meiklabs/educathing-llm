@@ -28,7 +28,10 @@ function agentFileServerEndpoints(app) {
    */
   app.get(
     "/agent-skills/generated-files/:filename",
-    [validatedRequest, flexUserRoleValid([ROLES.all])],
+    // ROLES.lector is included explicitly so the lector role — locked out of
+    // ROLES.all bypasses elsewhere — can still download files it accesses
+    // through the library UI.
+    [validatedRequest, flexUserRoleValid([ROLES.all, ROLES.lector])],
     async (request, response) => {
       try {
         const user = await userFromSession(request, response);
