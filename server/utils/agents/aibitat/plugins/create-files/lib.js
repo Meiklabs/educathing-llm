@@ -311,10 +311,21 @@ class CreateFilesManager {
   getLogo({ forDarkBackground = false, format = "buffer" } = {}) {
     // On Docker this is pre-packed images local to this lib.
     // Does not honor Whitelabeling changes/preferences right now.
+    //
+    // Institutional branding: if a cft-logo{,-invert}.png is present in the
+    // assets folder we use it; otherwise fall back to the AnythingLLM logo.
+    // Swapping in the CFT logos is therefore a drop-in file replacement with
+    // no code change required.
     const assetsPath = path.join(__dirname, "assets");
-    const filename = forDarkBackground
+    const cftFilename = forDarkBackground
+      ? "cft-logo.png"
+      : "cft-logo-invert.png";
+    const fallbackFilename = forDarkBackground
       ? "anything-llm.png"
       : "anything-llm-invert.png";
+    const filename = fsSync.existsSync(path.join(assetsPath, cftFilename))
+      ? cftFilename
+      : fallbackFilename;
     try {
       if (format === "dataUri") {
         const base64 = fsSync.readFileSync(
