@@ -104,6 +104,10 @@ module.exports.CreatePdfFile = {
                 extension: "pdf",
                 buffer,
                 displayFilename,
+                context: {
+                  invocation: this.super.handlerProps?.invocation ?? null,
+                  title: displayFilename,
+                },
               });
 
               this.super.socket.send("fileDownloadCard", {

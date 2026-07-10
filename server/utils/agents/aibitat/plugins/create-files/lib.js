@@ -208,9 +208,24 @@ class CreateFilesManager {
    * @param {string} params.extension - File extension (without dot)
    * @param {Buffer} params.buffer - The file content as a Buffer
    * @param {string} params.displayFilename - The user-friendly filename for display
+   * @param {object} [params.context] - Optional agent invocation context so the file
+   *   is indexed in the generated_documents library. When omitted (e.g. bare-scripts
+   *   or unit tests) the file still lands on disk; only the library index row is skipped.
+   * @param {object|null} [params.context.invocation] - The aibitat invocation object
+   *   exposing workspace_id, user_id and thread_id (as populated in server/utils/agents/index.js).
+   * @param {string|null} [params.context.docType] - Semantic doc type used by the
+   *   library filter dropdown: "programa" | "plan" | "asesoria" | "informe".
+   * @param {string|null} [params.context.title] - Optional display title for the
+   *   library card. Falls back to displayFilename.
    * @returns {Promise<{filename: string, displayFilename: string, fileSize: number, storagePath: string}>}
    */
-  async saveGeneratedFile({ fileType, extension, buffer, displayFilename }) {
+  async saveGeneratedFile({
+    fileType,
+    extension,
+    buffer,
+    displayFilename,
+    context = null,
+  }) {
     await this.ensureInitialized();
 
     const filename = this.generateFilename(fileType, extension);
@@ -221,6 +236,34 @@ class CreateFilesManager {
     console.log(
       `[CreateFilesManager] saveGeneratedFile - saved ${filename} (${(buffer.length / 1024).toFixed(2)}KB)`
     );
+
+    // Best-effort index into the library. Failure here must NOT break the
+    // save (users still get the file card / download); we swallow and log.
+    // Requires a workspace_id — otherwise the file is untracked (e.g. tests,
+    // scheduled jobs without workspace context).
+    try {
+      const workspaceId = context?.invocation?.workspace_id ?? null;
+      if (workspaceId) {
+        const { GeneratedDocument } = require("../../../../../models/generatedDocument");
+        await GeneratedDocument.create({
+          storageFilename: filename,
+          displayFilename,
+          fileType,
+          docType: context?.docType ?? null,
+          workspaceId,
+          threadId: context?.invocation?.thread_id ?? null,
+          userId: context?.invocation?.user_id ?? null,
+          chatId: null,
+          title: context?.title ?? displayFilename,
+          fileSize: buffer.length,
+        });
+      }
+    } catch (indexError) {
+      console.error(
+        `[CreateFilesManager] library-index write failed (${filename}):`,
+        indexError.message
+      );
+    }
 
     return {
       filename,
