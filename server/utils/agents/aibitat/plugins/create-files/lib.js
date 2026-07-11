@@ -241,11 +241,12 @@ class CreateFilesManager {
     // save (users still get the file card / download); we swallow and log.
     // Requires a workspace_id — otherwise the file is untracked (e.g. tests,
     // scheduled jobs without workspace context).
+    let libraryRow = null;
     try {
       const workspaceId = context?.invocation?.workspace_id ?? null;
       if (workspaceId) {
         const { GeneratedDocument } = require("../../../../../models/generatedDocument");
-        await GeneratedDocument.create({
+        libraryRow = await GeneratedDocument.create({
           storageFilename: filename,
           displayFilename,
           fileType,
@@ -263,6 +264,33 @@ class CreateFilesManager {
         `[CreateFilesManager] library-index write failed (${filename}):`,
         indexError.message
       );
+    }
+
+    // Audit trail (RF-09). Only fires when we actually indexed the file
+    // (needs a workspace + we know the actor). No request here — the agent
+    // runs server-side over a websocket, so ipAddress/userAgent are null.
+    if (libraryRow) {
+      try {
+        const { AuditLog } = require("../../../../../models/auditLog");
+        await AuditLog.record({
+          action: AuditLog.ACTIONS.DOCUMENT_GENERATED,
+          userId: context?.invocation?.user_id ?? null,
+          entityType: "generated_document",
+          entityId: libraryRow.id,
+          metadata: {
+            workspaceId: libraryRow.workspaceId,
+            fileType: libraryRow.fileType,
+            docType: libraryRow.docType,
+            displayFilename: libraryRow.displayFilename,
+            fileSize: libraryRow.fileSize,
+          },
+        });
+      } catch (auditError) {
+        console.error(
+          `[CreateFilesManager] audit write failed (${filename}):`,
+          auditError.message
+        );
+      }
     }
 
     return {

@@ -177,6 +177,15 @@ const router = createBrowserRouter([
         },
       },
       {
+        path: "/settings/audit-log",
+        lazy: async () => {
+          const { default: AuditLogPage } = await import(
+            "@/pages/Admin/AuditLog"
+          );
+          return { element: <AdminRoute Component={AuditLogPage} /> };
+        },
+      },
+      {
         path: "/settings/embed-chat-widgets",
         lazy: async () => {
           const { default: ChatEmbedWidgets } = await import(

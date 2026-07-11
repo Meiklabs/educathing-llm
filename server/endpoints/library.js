@@ -6,6 +6,7 @@ const {
 } = require("../utils/middleware/multiUserProtected");
 const { Workspace } = require("../models/workspace");
 const { GeneratedDocument } = require("../models/generatedDocument");
+const { AuditLog } = require("../models/auditLog");
 
 /**
  * Library endpoints — read-only surface backing the RF-10 document library
@@ -175,6 +176,28 @@ function libraryEndpoints(app) {
         }
 
         const ok = await GeneratedDocument.softDelete(id);
+        if (ok) {
+          // Audit trail (RF-09). Log the deletion with the actor's info so
+          // there's a record even after the row is soft-deleted from the
+          // library view.
+          try {
+            await AuditLog.record({
+              action: AuditLog.ACTIONS.DOCUMENT_DELETED,
+              userId: user?.id ?? null,
+              entityType: "generated_document",
+              entityId: doc.id,
+              request,
+              metadata: {
+                workspaceId: doc.workspaceId,
+                fileType: doc.fileType,
+                docType: doc.docType,
+                displayFilename: doc.displayFilename,
+              },
+            });
+          } catch (auditError) {
+            console.error("[library] audit write failed:", auditError.message);
+          }
+        }
         return response.status(ok ? 200 : 500).json({ ok });
       } catch (error) {
         console.error("[library] delete failed:", error.message);

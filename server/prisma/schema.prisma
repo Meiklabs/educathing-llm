@@ -88,6 +88,7 @@ model users {
   workspace_parsed_files       workspace_parsed_files[]
   memories                     memories[]
   generated_documents          generated_documents[]
+  audit_log                    audit_log[]
 }
 
 model recovery_codes {
@@ -520,3 +521,32 @@ model generated_documents {
   @@index([userId])
   @@index([createdAt])
 }
+
+// Audit trail for RF-09 traceability. Records the "who / what / when /
+// where" for security-relevant events. Actions covered today:
+//   - document_generated   (create-files agent produced a file)
+//   - document_downloaded  (someone hit the file server)
+//   - document_deleted     (library soft-delete)
+// New action strings can be added without a schema change.
+model audit_log {
+  id         Int      @id @default(autoincrement())
+  userId     Int?
+  action     String
+  entityType String?
+  entityId   String?
+  ipAddress  String?
+  userAgent  String?
+  // JSON-stringified extras: {workspaceId, docType, displayFilename, ...}.
+  // Stored as a text blob so callers can attach any structure without
+  // migrating the schema every time a new event surfaces.
+  metadata   String?
+  createdAt  DateTime @default(now())
+
+  user       users?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+

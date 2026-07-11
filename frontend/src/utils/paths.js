@@ -166,6 +166,9 @@ export default {
     logs: () => {
       return "/settings/event-logs";
     },
+    auditLog: () => {
+      return "/settings/audit-log";
+    },
     privacy: () => {
       return "/settings/privacy";
     },
