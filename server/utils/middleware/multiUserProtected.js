@@ -5,8 +5,26 @@ const ROLES = {
   admin: "admin",
   manager: "manager",
   default: "default",
+  // Read-only role. In the CFT deployment these users can only browse the
+  // document library and download previously generated documents — no chat,
+  // no workspace mutation, no admin surfaces. Routes that want to grant a
+  // lector access must add ROLES.lector explicitly to their allowlist; the
+  // catch-all ROLES.all sentinel deliberately excludes lector.
+  lector: "lector",
 };
 const DEFAULT_ROLES = [ROLES.admin, ROLES.admin];
+
+/**
+ * Decides whether the caller is a lector that should be denied from a
+ * ROLES.all bypass. Returns true if we should short-circuit with 401.
+ * Only runs when multi-user mode is on (single-user mode has no lectors).
+ */
+async function shouldDenyLector(request, response, allowedRoles) {
+  if (allowedRoles.includes(ROLES.lector)) return false;
+  const user =
+    response.locals?.user ?? (await userFromSession(request, response));
+  return user?.role === ROLES.lector;
+}
 
 /**
  * Explicitly check that single user mode is enabled as well as that the
@@ -29,7 +47,19 @@ async function isSingleUserMode(_request, response, next) {
 function strictMultiUserRoleValid(allowedRoles = DEFAULT_ROLES) {
   return async (request, response, next) => {
     // If the access-control is allowable for all - skip validations and continue;
+    // unless the caller is a lector, in which case we deny by default (see
+    // shouldDenyLector). Endpoints that want to expose a ROLES.all bypass to
+    // lectors must add ROLES.lector to their allowlist.
     if (allowedRoles.includes(ROLES.all)) {
+      const multiUserMode =
+        response.locals?.multiUserMode ??
+        (await SystemSettings.isMultiUserMode());
+      if (
+        multiUserMode &&
+        (await shouldDenyLector(request, response, allowedRoles))
+      ) {
+        return response.sendStatus(401).end();
+      }
       next();
       return;
     }
@@ -58,8 +88,19 @@ function strictMultiUserRoleValid(allowedRoles = DEFAULT_ROLES) {
 function flexUserRoleValid(allowedRoles = DEFAULT_ROLES) {
   return async (request, response, next) => {
     // If the access-control is allowable for all - skip validations and continue;
-    // It does not matter if multi-user or not.
+    // It does not matter if multi-user or not. Lector is denied here unless
+    // the endpoint explicitly opts in via ROLES.lector — this keeps chat and
+    // workspace mutation surfaces off-limits without touching every route.
     if (allowedRoles.includes(ROLES.all)) {
+      const multiUserMode =
+        response.locals?.multiUserMode ??
+        (await SystemSettings.isMultiUserMode());
+      if (
+        multiUserMode &&
+        (await shouldDenyLector(request, response, allowedRoles))
+      ) {
+        return response.sendStatus(401).end();
+      }
       next();
       return;
     }

@@ -86,8 +86,8 @@ export function AdminRoute({ Component, hideUserMenu = false }) {
   }
 
   const user = userFromStorage();
-  return isAuthd && (user?.role === "admin" || !multiUserMode) ? (
-    hideUserMenu ? (
+  if (isAuthd && (user?.role === "admin" || !multiUserMode)) {
+    return hideUserMenu ? (
       <KeyboardShortcutWrapper>
         <Component />
       </KeyboardShortcutWrapper>
@@ -97,14 +97,15 @@ export function AdminRoute({ Component, hideUserMenu = false }) {
           <Component />
         </UserMenu>
       </KeyboardShortcutWrapper>
-    )
-  ) : (
-    <Navigate to={paths.home()} />
-  );
+    );
+  }
+  return <Navigate to={user?.role === "lector" ? "/library" : paths.home()} />;
 }
 
 // Allows manager and admin to access the route and if in single user mode,
-// allows all users to access the route
+// allows all users to access the route.
+// Lectores are treated the same as default (docente) here — they cannot access
+// admin/manager surfaces and are redirected to /library where they belong.
 export function ManagerRoute({ Component }) {
   const { isAuthd, shouldRedirectToOnboarding, multiUserMode } =
     useIsAuthenticated();
@@ -115,14 +116,38 @@ export function ManagerRoute({ Component }) {
   }
 
   const user = userFromStorage();
-  return isAuthd && (user?.role !== "default" || !multiUserMode) ? (
+  const isManagerOrAdmin =
+    user?.role === "admin" || user?.role === "manager" || !multiUserMode;
+  if (isAuthd && isManagerOrAdmin) {
+    return (
+      <KeyboardShortcutWrapper>
+        <UserMenu>
+          <Component />
+        </UserMenu>
+      </KeyboardShortcutWrapper>
+    );
+  }
+  return <Navigate to={user?.role === "lector" ? "/library" : paths.home()} />;
+}
+
+// Allows any authenticated role (including lector) to access the route.
+// Used exclusively for /library — the only surface a lector can touch.
+export function LibraryRoute({ Component }) {
+  const { isAuthd, shouldRedirectToOnboarding } = useIsAuthenticated();
+  if (isAuthd === null) return <FullScreenLoader />;
+
+  if (shouldRedirectToOnboarding) {
+    return <Navigate to={paths.onboarding.home()} />;
+  }
+
+  return isAuthd ? (
     <KeyboardShortcutWrapper>
       <UserMenu>
         <Component />
       </UserMenu>
     </KeyboardShortcutWrapper>
   ) : (
-    <Navigate to={paths.home()} />
+    <Navigate to={paths.login(true)} />
   );
 }
 
@@ -153,13 +178,17 @@ export default function PrivateRoute({ Component }) {
     return <Navigate to="/onboarding" />;
   }
 
-  return isAuthd ? (
+  if (!isAuthd) return <Navigate to={paths.login(true)} />;
+
+  // Lectores can only ever land in /library; everywhere else is a redirect.
+  const user = userFromStorage();
+  if (user?.role === "lector") return <Navigate to="/library" />;
+
+  return (
     <KeyboardShortcutWrapper>
       <UserMenu>
         <Component />
       </UserMenu>
     </KeyboardShortcutWrapper>
-  ) : (
-    <Navigate to={paths.login(true)} />
   );
 }

@@ -13,6 +13,8 @@ const { Workspace } = require("../models/workspace");
 const { ScheduledJobRun } = require("../models/scheduledJobRun");
 const createFilesLib = require("../utils/agents/aibitat/plugins/create-files/lib");
 const { Telemetry } = require("../models/telemetry");
+const { GeneratedDocument } = require("../models/generatedDocument");
+const { AuditLog } = require("../models/auditLog");
 
 /**
  * Endpoints for serving agent-generated files (PPTX, etc.) with authentication
@@ -28,7 +30,10 @@ function agentFileServerEndpoints(app) {
    */
   app.get(
     "/agent-skills/generated-files/:filename",
-    [validatedRequest, flexUserRoleValid([ROLES.all])],
+    // ROLES.lector is included explicitly so the lector role — locked out of
+    // ROLES.all bypasses elsewhere — can still download files it accesses
+    // through the library UI.
+    [validatedRequest, flexUserRoleValid([ROLES.all, ROLES.lector])],
     async (request, response) => {
       try {
         const user = await userFromSession(request, response);
@@ -79,6 +84,36 @@ function agentFileServerEndpoints(app) {
         Telemetry.sendTelemetry("agent_generated_file_downloaded", {
           type: mimeType,
         }).catch(() => {});
+
+        // Audit trail (RF-09). Best-effort; a broken audit write must not
+        // affect the download the client already received. entityId points at
+        // the generated_documents row when we have one (files created after
+        // block 4); pre-existing files just get a null entity and stash the
+        // storage filename in metadata for after-the-fact correlation.
+        try {
+          const libraryRow = await GeneratedDocument.get({
+            storageFilename: filename,
+          });
+          await AuditLog.record({
+            action: AuditLog.ACTIONS.DOCUMENT_DOWNLOADED,
+            userId: user?.id ?? null,
+            entityType: "generated_document",
+            entityId: libraryRow?.id ?? null,
+            request,
+            metadata: {
+              storageFilename: filename,
+              displayFilename: fileSource.displayFilename,
+              workspaceId: libraryRow?.workspaceId ?? fileSource.workspaceId,
+              fileType: libraryRow?.fileType,
+              fileSize: fileData.buffer.length,
+            },
+          });
+        } catch (auditError) {
+          console.error(
+            "[agentFileServer] audit write failed:",
+            auditError.message
+          );
+        }
         return;
       } catch (error) {
         console.error("[agentFileServer] Download error:", error.message);

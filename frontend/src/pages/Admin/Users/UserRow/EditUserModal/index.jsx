@@ -141,10 +141,11 @@ export default function EditUserModal({ currentUser, user, closeModal }) {
                   onChange={(e) => setRole(e.target.value)}
                   className="border-none bg-theme-settings-input-bg w-full text-white placeholder:text-theme-settings-input-placeholder text-sm rounded-lg focus:outline-primary-button active:outline-primary-button outline-none block w-full p-2.5"
                 >
-                  <option value="default">Default</option>
-                  <option value="manager">Manager</option>
+                  <option value="default">Docente</option>
+                  <option value="manager">Asesor Curricular</option>
+                  <option value="lector">Lector</option>
                   {currentUser?.role === "admin" && (
-                    <option value="admin">Administrator</option>
+                    <option value="admin">Administrador</option>
                   )}
                 </select>
                 <RoleHintDisplay role={role} />

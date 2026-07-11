@@ -319,6 +319,10 @@ module.exports.CreatePptxPresentation = {
                 extension: "pptx",
                 buffer,
                 displayFilename,
+                context: {
+                  invocation: this.super.handlerProps?.invocation ?? null,
+                  title: displayFilename,
+                },
               });
 
               this.super.socket.send("fileDownloadCard", {

@@ -90,9 +90,9 @@ module.exports.CreateDocxFile = {
               },
               theme: {
                 type: "string",
-                enum: ["neutral", "blue", "warm"],
+                enum: ["neutral", "blue", "warm", "cft"],
                 description:
-                  "Color theme for the document. 'neutral' (slate/grey), 'blue' (corporate blue), or 'warm' (earthy tones). Defaults to neutral.",
+                  "Color theme for the document. 'cft' (CFT de Magallanes institutional red/gray — default), 'neutral' (slate/grey), 'blue' (corporate blue), or 'warm' (earthy tones).",
               },
               margins: {
                 type: "string",
@@ -115,7 +115,7 @@ module.exports.CreateDocxFile = {
             subtitle = null,
             author = null,
             content = "",
-            theme = "neutral",
+            theme = "cft",
             margins = "normal",
             includeTitlePage = false,
           }) {
@@ -265,6 +265,10 @@ module.exports.CreateDocxFile = {
                 extension: "docx",
                 buffer,
                 displayFilename,
+                context: {
+                  invocation: this.super.handlerProps?.invocation ?? null,
+                  title: documentTitle,
+                },
               });
 
               this.super.socket.send("fileDownloadCard", {
@@ -284,7 +288,7 @@ module.exports.CreateDocxFile = {
               );
 
               const styleInfo = [
-                theme !== "neutral" ? `${theme} theme` : null,
+                theme !== "cft" ? `${theme} theme` : null,
                 margins !== "normal" ? `${margins} margins` : null,
                 includeTitlePage ? "title page" : null,
               ].filter(Boolean);

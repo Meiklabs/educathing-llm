@@ -124,6 +124,10 @@ module.exports.CreateTextFile = {
                 extension: finalExtension,
                 buffer,
                 displayFilename,
+                context: {
+                  invocation: this.super.handlerProps?.invocation ?? null,
+                  title: displayFilename,
+                },
               });
 
               this.super.socket.send("fileDownloadCard", {

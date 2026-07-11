@@ -40,6 +40,17 @@ const DOCUMENT_STYLES = {
       coverText: "FFFFFF",
       footerText: "8B6914",
     },
+    // CFT Estatal de Magallanes institutional identity.
+    // Red sampled from the wordmark; gray from "DE MAGALLANES".
+    cft: {
+      heading: "A62933",
+      accent: "4A4A4A",
+      tableHeader: "F4E1E3",
+      border: "D9A5AB",
+      coverBg: "A62933",
+      coverText: "FFFFFF",
+      footerText: "4A4A4A",
+    },
   },
   fonts: {
     body: "Calibri",

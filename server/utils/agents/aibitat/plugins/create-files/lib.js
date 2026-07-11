@@ -208,9 +208,24 @@ class CreateFilesManager {
    * @param {string} params.extension - File extension (without dot)
    * @param {Buffer} params.buffer - The file content as a Buffer
    * @param {string} params.displayFilename - The user-friendly filename for display
+   * @param {object} [params.context] - Optional agent invocation context so the file
+   *   is indexed in the generated_documents library. When omitted (e.g. bare-scripts
+   *   or unit tests) the file still lands on disk; only the library index row is skipped.
+   * @param {object|null} [params.context.invocation] - The aibitat invocation object
+   *   exposing workspace_id, user_id and thread_id (as populated in server/utils/agents/index.js).
+   * @param {string|null} [params.context.docType] - Semantic doc type used by the
+   *   library filter dropdown: "programa" | "plan" | "asesoria" | "informe".
+   * @param {string|null} [params.context.title] - Optional display title for the
+   *   library card. Falls back to displayFilename.
    * @returns {Promise<{filename: string, displayFilename: string, fileSize: number, storagePath: string}>}
    */
-  async saveGeneratedFile({ fileType, extension, buffer, displayFilename }) {
+  async saveGeneratedFile({
+    fileType,
+    extension,
+    buffer,
+    displayFilename,
+    context = null,
+  }) {
     await this.ensureInitialized();
 
     const filename = this.generateFilename(fileType, extension);
@@ -221,6 +236,62 @@ class CreateFilesManager {
     console.log(
       `[CreateFilesManager] saveGeneratedFile - saved ${filename} (${(buffer.length / 1024).toFixed(2)}KB)`
     );
+
+    // Best-effort index into the library. Failure here must NOT break the
+    // save (users still get the file card / download); we swallow and log.
+    // Requires a workspace_id — otherwise the file is untracked (e.g. tests,
+    // scheduled jobs without workspace context).
+    let libraryRow = null;
+    try {
+      const workspaceId = context?.invocation?.workspace_id ?? null;
+      if (workspaceId) {
+        const { GeneratedDocument } = require("../../../../../models/generatedDocument");
+        libraryRow = await GeneratedDocument.create({
+          storageFilename: filename,
+          displayFilename,
+          fileType,
+          docType: context?.docType ?? null,
+          workspaceId,
+          threadId: context?.invocation?.thread_id ?? null,
+          userId: context?.invocation?.user_id ?? null,
+          chatId: null,
+          title: context?.title ?? displayFilename,
+          fileSize: buffer.length,
+        });
+      }
+    } catch (indexError) {
+      console.error(
+        `[CreateFilesManager] library-index write failed (${filename}):`,
+        indexError.message
+      );
+    }
+
+    // Audit trail (RF-09). Only fires when we actually indexed the file
+    // (needs a workspace + we know the actor). No request here — the agent
+    // runs server-side over a websocket, so ipAddress/userAgent are null.
+    if (libraryRow) {
+      try {
+        const { AuditLog } = require("../../../../../models/auditLog");
+        await AuditLog.record({
+          action: AuditLog.ACTIONS.DOCUMENT_GENERATED,
+          userId: context?.invocation?.user_id ?? null,
+          entityType: "generated_document",
+          entityId: libraryRow.id,
+          metadata: {
+            workspaceId: libraryRow.workspaceId,
+            fileType: libraryRow.fileType,
+            docType: libraryRow.docType,
+            displayFilename: libraryRow.displayFilename,
+            fileSize: libraryRow.fileSize,
+          },
+        });
+      } catch (auditError) {
+        console.error(
+          `[CreateFilesManager] audit write failed (${filename}):`,
+          auditError.message
+        );
+      }
+    }
 
     return {
       filename,
@@ -311,10 +382,21 @@ class CreateFilesManager {
   getLogo({ forDarkBackground = false, format = "buffer" } = {}) {
     // On Docker this is pre-packed images local to this lib.
     // Does not honor Whitelabeling changes/preferences right now.
+    //
+    // Institutional branding: if a cft-logo{,-invert}.png is present in the
+    // assets folder we use it; otherwise fall back to the AnythingLLM logo.
+    // Swapping in the CFT logos is therefore a drop-in file replacement with
+    // no code change required.
     const assetsPath = path.join(__dirname, "assets");
-    const filename = forDarkBackground
+    const cftFilename = forDarkBackground
+      ? "cft-logo.png"
+      : "cft-logo-invert.png";
+    const fallbackFilename = forDarkBackground
       ? "anything-llm.png"
       : "anything-llm-invert.png";
+    const filename = fsSync.existsSync(path.join(assetsPath, cftFilename))
+      ? cftFilename
+      : fallbackFilename;
     try {
       if (format === "dataUri") {
         const base64 = fsSync.readFileSync(

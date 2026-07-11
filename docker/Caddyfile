@@ -1,0 +1,35 @@
+# Caddy config for Educathing.
+#
+# {$DOMAIN} is read from the .env file that docker-compose loads into the
+# caddy service. If DOMAIN is a real hostname (e.g. educathing.cft.cl), Caddy
+# provisions a Let's Encrypt certificate automatically on first request.
+# If DOMAIN is left as "localhost" (the install.sh default), Caddy issues a
+# local self-signed cert instead — useful for smoke-testing the stack before
+# pointing DNS at the VPS.
+
+{
+	email {$ACME_EMAIL:admin@localhost}
+}
+
+{$DOMAIN:localhost} {
+	encode zstd gzip
+
+	# Agent websocket streaming needs upgrade support; Caddy handles it
+	# transparently via reverse_proxy, but we set generous timeouts because
+	# long RAG generations can keep the connection open for minutes.
+	reverse_proxy educathing:3001 {
+		flush_interval -1
+		transport http {
+			read_timeout 10m
+			write_timeout 10m
+		}
+	}
+
+	# Basic hardening: hide server banner and add sensible security headers.
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+}

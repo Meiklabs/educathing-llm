@@ -402,6 +402,18 @@ const SidebarOptions = ({ user = null, t }) => (
               roles: ["admin"],
             },
             {
+              btnText: "Auditoría de documentos",
+              href: paths.settings.auditLog(),
+              flex: true,
+              roles: ["admin"],
+            },
+            {
+              btnText: "Consumo de IA",
+              href: paths.settings.llmUsage(),
+              flex: true,
+              roles: ["admin"],
+            },
+            {
               btnText: t("settings.scheduled-jobs"),
               href: paths.settings.scheduledJobs(),
               flex: true,

@@ -6,6 +6,7 @@ import PrivateRoute, {
   AdminRoute,
   ManagerRoute,
   SingleUserRoute,
+  LibraryRoute,
 } from "@/components/PrivateRoute";
 import Login from "@/pages/Login";
 import SimpleSSOPassthrough from "@/pages/Login/SSO/simple";
@@ -59,6 +60,15 @@ const router = createBrowserRouter([
         lazy: async () => {
           const { default: InvitePage } = await import("@/pages/Invite");
           return { element: <InvitePage /> };
+        },
+      },
+      // Library (RF-10): the only surface a lector can reach; the other three
+      // roles use it too as the CFT document library.
+      {
+        path: "/library",
+        lazy: async () => {
+          const { default: LibraryPage } = await import("@/pages/Library");
+          return { element: <LibraryRoute Component={LibraryPage} /> };
         },
       },
       // Admin routes
@@ -164,6 +174,24 @@ const router = createBrowserRouter([
         lazy: async () => {
           const { default: AdminLogs } = await import("@/pages/Admin/Logging");
           return { element: <AdminRoute Component={AdminLogs} /> };
+        },
+      },
+      {
+        path: "/settings/audit-log",
+        lazy: async () => {
+          const { default: AuditLogPage } = await import(
+            "@/pages/Admin/AuditLog"
+          );
+          return { element: <AdminRoute Component={AuditLogPage} /> };
+        },
+      },
+      {
+        path: "/settings/llm-usage",
+        lazy: async () => {
+          const { default: LlmUsagePage } = await import(
+            "@/pages/Admin/LlmUsage"
+          );
+          return { element: <AdminRoute Component={LlmUsagePage} /> };
         },
       },
       {

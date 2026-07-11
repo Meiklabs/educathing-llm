@@ -87,6 +87,9 @@ model users {
   desktop_mobile_devices       desktop_mobile_devices[]
   workspace_parsed_files       workspace_parsed_files[]
   memories                     memories[]
+  generated_documents          generated_documents[]
+  audit_log                    audit_log[]
+  llm_usage                    llm_usage[]
 }
 
 model recovery_codes {
@@ -149,6 +152,8 @@ model workspaces {
   prompt_history               prompt_history[]
   workspace_parsed_files       workspace_parsed_files[]
   memories                     memories[]
+  generated_documents          generated_documents[]
+  llm_usage                    llm_usage[]
 }
 
 model workspace_threads {
@@ -486,3 +491,97 @@ model model_router_rules {
   @@index([router_id])
   @@index([router_id, enabled, priority])
 }
+
+// Registry of documents produced by the create-files agent (DOCX/PDF/XLSX/
+// PPTX). Each row points at a file physically stored under
+// storage/generated-files/ and carries the audit metadata used by the
+// library page and by the RF-09 traceability requirement (which user,
+// which carrera, which chat).
+model generated_documents {
+  id              Int      @id @default(autoincrement())
+  storageFilename String   @unique
+  displayFilename String
+  fileType        String
+  // Semantic type used by the library filter dropdown: "programa" (RF-03),
+  // "plan" (RF-04), "asesoria" (RF-05), "informe" (RF-07). Nullable for
+  // free-form documents that the agent produced outside a preset.
+  docType         String?
+  workspaceId     Int
+  threadId        Int?
+  userId          Int?
+  chatId          Int?
+  title           String?
+  fileSize        Int
+  createdAt       DateTime  @default(now())
+  deletedAt       DateTime?
+
+  workspace       workspaces @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user            users?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, fileType])
+  @@index([workspaceId, docType])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// Audit trail for RF-09 traceability. Records the "who / what / when /
+// where" for security-relevant events. Actions covered today:
+//   - document_generated   (create-files agent produced a file)
+//   - document_downloaded  (someone hit the file server)
+//   - document_deleted     (library soft-delete)
+// New action strings can be added without a schema change.
+model audit_log {
+  id         Int      @id @default(autoincrement())
+  userId     Int?
+  action     String
+  entityType String?
+  entityId   String?
+  ipAddress  String?
+  userAgent  String?
+  // JSON-stringified extras: {workspaceId, docType, displayFilename, ...}.
+  // Stored as a text blob so callers can attach any structure without
+  // migrating the schema every time a new event surfaces.
+  metadata   String?
+  createdAt  DateTime @default(now())
+
+  user       users?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// Per-request LLM usage log powering the "panel de consumo" required by
+// the RFP. Populated by the chat pipeline after each provider call so we
+// can slice by user, workspace, model and time. costUsd is nullable
+// because only providers that report cost inline (OpenRouter with
+// usage.include=true) can populate it; others get null and the panel
+// falls back to "n/d".
+model llm_usage {
+  id               Int      @id @default(autoincrement())
+  userId           Int?
+  workspaceId      Int?
+  threadId         Int?
+  provider         String
+  model            String
+  // "chat" (regular workspace chat) | "agent" (aibitat tool use).
+  // Free-form so future call sites (embed, developer API, mobile) can
+  // add their own without a schema change.
+  requestType      String   @default("chat")
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  totalTokens      Int      @default(0)
+  costUsd          Float?
+  durationMs       Int?
+  createdAt        DateTime @default(now())
+
+  user             users?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  workspace        workspaces? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@index([model, createdAt])
+  @@index([createdAt])
+}
+
