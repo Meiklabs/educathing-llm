@@ -1,6 +1,7 @@
 const { v4: uuidv4 } = require("uuid");
 const { DocumentManager } = require("../DocumentManager");
 const { WorkspaceChats } = require("../../models/workspaceChats");
+const { LlmUsage } = require("../../models/llmUsage");
 const { WorkspaceParsedFiles } = require("../../models/workspaceParsedFiles");
 const { getVectorDbClass, resolveProviderConnector } = require("../helpers");
 const { writeResponseChunk } = require("../helpers/chat/responses");
@@ -322,6 +323,26 @@ async function streamChatWithWorkspace(
       threadId: thread?.id || null,
       user,
     });
+
+    // Per-request LLM usage log for the consumption panel. Best-effort:
+    // never throws, never blocks the response. cost_usd is populated for
+    // OpenRouter (usage.include=true); other providers get null.
+    LlmUsage.record({
+      userId: user?.id ?? null,
+      workspaceId: workspace?.id ?? null,
+      threadId: thread?.id ?? null,
+      provider: metrics?.provider || "unknown",
+      model: metrics?.model || "unknown",
+      requestType: LlmUsage.REQUEST_TYPES.CHAT,
+      promptTokens: metrics?.prompt_tokens || 0,
+      completionTokens: metrics?.completion_tokens || 0,
+      totalTokens: metrics?.total_tokens || 0,
+      costUsd: metrics?.cost_usd ?? null,
+      durationMs:
+        typeof metrics?.duration === "number"
+          ? Math.round(metrics.duration * 1000)
+          : null,
+    }).catch(() => {});
 
     writeResponseChunk(response, {
       uuid,

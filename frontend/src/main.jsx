@@ -186,6 +186,15 @@ const router = createBrowserRouter([
         },
       },
       {
+        path: "/settings/llm-usage",
+        lazy: async () => {
+          const { default: LlmUsagePage } = await import(
+            "@/pages/Admin/LlmUsage"
+          );
+          return { element: <AdminRoute Component={LlmUsagePage} /> };
+        },
+      },
+      {
         path: "/settings/embed-chat-widgets",
         lazy: async () => {
           const { default: ChatEmbedWidgets } = await import(

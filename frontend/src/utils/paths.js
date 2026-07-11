@@ -169,6 +169,9 @@ export default {
     auditLog: () => {
       return "/settings/audit-log";
     },
+    llmUsage: () => {
+      return "/settings/llm-usage";
+    },
     privacy: () => {
       return "/settings/privacy";
     },

@@ -89,6 +89,7 @@ model users {
   memories                     memories[]
   generated_documents          generated_documents[]
   audit_log                    audit_log[]
+  llm_usage                    llm_usage[]
 }
 
 model recovery_codes {
@@ -152,6 +153,7 @@ model workspaces {
   workspace_parsed_files       workspace_parsed_files[]
   memories                     memories[]
   generated_documents          generated_documents[]
+  llm_usage                    llm_usage[]
 }
 
 model workspace_threads {
@@ -547,6 +549,39 @@ model audit_log {
   @@index([userId, createdAt])
   @@index([action, createdAt])
   @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// Per-request LLM usage log powering the "panel de consumo" required by
+// the RFP. Populated by the chat pipeline after each provider call so we
+// can slice by user, workspace, model and time. costUsd is nullable
+// because only providers that report cost inline (OpenRouter with
+// usage.include=true) can populate it; others get null and the panel
+// falls back to "n/d".
+model llm_usage {
+  id               Int      @id @default(autoincrement())
+  userId           Int?
+  workspaceId      Int?
+  threadId         Int?
+  provider         String
+  model            String
+  // "chat" (regular workspace chat) | "agent" (aibitat tool use).
+  // Free-form so future call sites (embed, developer API, mobile) can
+  // add their own without a schema change.
+  requestType      String   @default("chat")
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  totalTokens      Int      @default(0)
+  costUsd          Float?
+  durationMs       Int?
+  createdAt        DateTime @default(now())
+
+  user             users?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  workspace        workspaces? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@index([model, createdAt])
   @@index([createdAt])
 }
 

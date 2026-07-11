@@ -253,6 +253,11 @@ class OpenRouterLLM {
           // This is an OpenRouter specific option that allows us to get the reasoning text
           // before the token text.
           include_reasoning: true,
+          // Ask OpenRouter to include per-request cost in the response so the
+          // consumption panel (RF: panel simple de consumo) has exact USD
+          // figures without maintaining our own price table.
+          // See https://openrouter.ai/docs/use-cases/usage-accounting
+          usage: { include: true },
           user: user?.id ? `user_${user.id}` : "",
         })
         .catch((e) => {
@@ -278,6 +283,13 @@ class OpenRouterLLM {
         duration: result.duration,
         model: this.model,
         provider: this.className,
+        // cost is a plain number in USD when include:true is honored. Cast
+        // defensively so a nullish value flows through as null rather than 0
+        // (the panel treats null as "n/d" — 0 as "free").
+        cost_usd:
+          typeof result.output.usage.cost === "number"
+            ? result.output.usage.cost
+            : null,
         timestamp: new Date(),
       },
     };
@@ -301,6 +313,9 @@ class OpenRouterLLM {
         // This is an OpenRouter specific option that allows us to get the reasoning text
         // before the token text.
         include_reasoning: true,
+        // Ask OpenRouter to include per-request cost in the last stream
+        // chunk so the panel de consumo has exact USD figures.
+        usage: { include: true },
         user: user?.id ? `user_${user.id}` : "",
       }),
       messages,
@@ -387,6 +402,14 @@ class OpenRouterLLM {
               prompt_tokens: chunk.usage.prompt_tokens,
               completion_tokens: chunk.usage.completion_tokens,
               total_tokens: chunk.usage.total_tokens,
+              // With usage.include=true OpenRouter emits `cost` (USD) on the
+              // final usage chunk. Forward it so LLMPerformanceMonitor's
+              // endMeasurement carries it into metrics.cost_usd for the
+              // consumption panel.
+              cost_usd:
+                typeof chunk.usage.cost === "number"
+                  ? chunk.usage.cost
+                  : null,
             };
           }
 
